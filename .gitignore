@@ -44,3 +44,8 @@ venv.bak/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Test run output artifacts
+output/cli_test/
+output/cli_unet/
+output/test_run/
