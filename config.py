@@ -1,7 +1,9 @@
 import argparse
 
 def str2bool(v):
-    return v.lower() in ('true')
+    if isinstance(v, bool):
+        return v
+    return v.lower() in ('true', '1', 't', 'yes', 'y')
 
 def get_parameters():
 
@@ -15,7 +17,8 @@ def get_parameters():
 
     # Misc
     parser.add_argument('-t','--train', type=str2bool, default=False,help="True when train the model, else used for testing.")
-    parser.add_argument('-v','--test', default=False, type=str, help="Path to the audio file for testing through model prediction.")
+    parser.add_argument('-v','--test', default=None, type=str, help="Path to the audio file for testing through model prediction.")
+    parser.add_argument('-o', '--output_dir', type=str, default='./output/', help="Directory to save separated audio outputs.")
 
     # Model hyperparameter
     parser.add_argument('-b', '--batch', dest='batch',type=int, default=16)

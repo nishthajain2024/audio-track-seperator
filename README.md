@@ -56,11 +56,22 @@ model.build_graph().summary()
 ```
 Trains the u-net model on MUSDB18 Dataset and saves the trained model to the provided directory ( *--model_save_path* ).
 
-## Testing
-``` python
-!python main.py --sampling_rate 11025 --test /content/pop.00000.wav --model_save_path ./models/
+## Quick Inference (Pre-trained Model)
+Separate vocals and drums from any audio track directly using the pre-trained weights in `./models/`:
+```bash
+python separate_audio.py --audio treat_you_better.wav --output_dir ./output/
 ```
-Loads the model from *model_save_path*, reads the audio file from the provided path( *--test* ) with librosa, process it and use the model to predict the output. In the end, the predictions are visualized by a wave plot and saved to the root directory.
+
+Options:
+- `--audio`: Path to the input `.wav` file (e.g., `treat_you_better.wav`, `sample_mixture.wav`).
+- `--output_dir`: Directory to store separated stem `.wav` files and comparison plots (defaults to `./output/`).
+- `--model_weights`: Path to model weights directory (defaults to `./models/`).
+
+## Testing with main.py
+```bash
+python main.py --sampling_rate 11025 --test treat_you_better.wav --model_save_path ./models/ --output_dir ./output/
+```
+Loads the model from *model_save_path*, processes the audio track, and saves separated stems and waveform visualization to `./output/`.
 
 <img align="center" alt="example1" src="./images/ex10.png" style="background-color:white"/><br>
 

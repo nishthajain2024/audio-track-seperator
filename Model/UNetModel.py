@@ -32,71 +32,76 @@ class AudioTrackSeparation(tf.keras.Model):
         self.output_layer_1 = layers.Conv1D(1, 1, 1, activation='tanh', 
                                             padding='valid', name='output_1')
 
-    @property
-    def metrics(self):
-        return [self.loss_metric_vocals, self.loss_metric_drums]
-    
-    def compile(self, 
-                vocals_optimizer, 
-                drums_optimizer,
-                **kwargs):
-        super().compile(**kwargs)
-        self.vocals_optimizer = vocals_optimizer
-        self.drums_optimizer = drums_optimizer
-
         self.loss_metric_vocals = tf.keras.metrics.Mean(name="vocal_loss")
         self.loss_metric_drums = tf.keras.metrics.Mean(name="drums_loss")
-        self.mse = tf.keras.losses.MeanSquaredError()
+        self.loss_metric_total = tf.keras.metrics.Mean(name="total_loss")
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+
+    @property
+    def metrics(self):
+        return [self.loss_metric_vocals, self.loss_metric_drums, self.loss_metric_total]
+    
+    def compile(self, 
+                optimizer=None,
+                vocals_optimizer=None,
+                drums_optimizer=None,
+                **kwargs):
+        super().compile(**kwargs)
+        if optimizer is not None:
+            self.optimizer = optimizer
+        elif vocals_optimizer is not None:
+            self.optimizer = vocals_optimizer
 
     def calculate_loss(self, target, pred):
         '''
-        We will optimize 2 losses for our mode:
-            1. L1-Loss.
-            2. Mean Squared Error.
+        Optimizes balanced L1 Loss + Mean Squared Error without distortion.
         '''
         l1_loss = tf.reduce_mean(tf.abs(target - pred))
-        mse_loss = tf.reduce_mean(tf.reduce_sum(self.mse(target, pred)))
-
+        mse_loss = tf.reduce_mean(tf.square(target - pred))
         return l1_loss + mse_loss
         
     def train_step(self, batch_data):
-        input, target = batch_data
+        input_data, target = batch_data
         target0, target1 = target
 
-        with tf.GradientTape() as tape_0, tf.GradientTape() as tape_1:
-            pred0, pred1 = self(input, training=True)
+        with tf.GradientTape() as tape:
+            pred0, pred1 = self(input_data, training=True)
 
             loss0 = self.calculate_loss(target0, pred0)
             loss1 = self.calculate_loss(target1, pred1)
+            total_loss = loss0 + loss1
 
-        gradients_0 = tape_0.gradient(loss0, self.trainable_variables)
-        self.vocals_optimizer.apply_gradients(zip(gradients_0, self.trainable_variables))
+        gradients = tape.gradient(total_loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+
         self.loss_metric_vocals.update_state(loss0)
-
-        gradients_1 = tape_1.gradient(loss1, self.trainable_variables)
-        self.drums_optimizer.apply_gradients(zip(gradients_1, self.trainable_variables))
         self.loss_metric_drums.update_state(loss1)
+        self.loss_metric_total.update_state(total_loss)
 
         return {
             "vocal_loss": self.loss_metric_vocals.result(),
-            "drums_loss": self.loss_metric_drums.result()
+            "drums_loss": self.loss_metric_drums.result(),
+            "total_loss": self.loss_metric_total.result()
         }
     
     def test_step(self, batch_data):
-        input, target = batch_data
+        input_data, target = batch_data
         target0, target1 = target
 
-        pred0, pred1 = self(input, training=False)
+        pred0, pred1 = self(input_data, training=False)
 
         loss0 = self.calculate_loss(target0, pred0)
         loss1 = self.calculate_loss(target1, pred1)
+        total_loss = loss0 + loss1
         
         self.loss_metric_vocals.update_state(loss0)
         self.loss_metric_drums.update_state(loss1)
+        self.loss_metric_total.update_state(total_loss)
 
         return {
             "vocal_loss": self.loss_metric_vocals.result(),
-            "drums_loss": self.loss_metric_drums.result()
+            "drums_loss": self.loss_metric_drums.result(),
+            "total_loss": self.loss_metric_total.result()
         }
 
     def build_graph(self):

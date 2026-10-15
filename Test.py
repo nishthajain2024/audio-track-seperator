@@ -1,3 +1,5 @@
+import os
+import tensorflow as tf
 from Model.UNetModel import AudioTrackSeparation
 
 def test_model(config, test_input):
@@ -6,12 +8,21 @@ def test_model(config, test_input):
            config: configuration variable to get model weight path.
            test_input: Processed array of provided audio data.
         Returns: Model prediction for processed input array.
-        
     '''
     model = AudioTrackSeparation()
-    model.load_weights(config.model_save_path+'model_weights')
+    model.build(input_shape=(None, config.dim, 1))
 
-    prediction = model.predict(test_input)
+    weights_path = os.path.join(config.model_save_path, 'model_weights')
+    if not (os.path.exists(weights_path + '.index') or os.path.exists(weights_path)):
+        if os.path.exists(config.model_save_path):
+            latest_ckpt = tf.train.latest_checkpoint(config.model_save_path)
+            if latest_ckpt:
+                weights_path = latest_ckpt
 
-    return prediction
-    
+    print(f"Loading weights from: {weights_path}")
+    model.load_weights(weights_path).expect_partial()
+
+    test_tensor = tf.convert_to_tensor(test_input, dtype=tf.float32)
+    pred_vocals, pred_drums = model(test_tensor, training=False)
+
+    return [pred_vocals.numpy(), pred_drums.numpy()]

@@ -16,32 +16,30 @@ def train(model_config):
         sampling_rate = model_config.sampling_rate,
         dim = model_config.dim,
         batch_size = model_config.batch,
+        shuffle = True
     )
 
     validation_loader = DataGenerator(
         data=musdb_validation,
         sampling_rate=model_config.sampling_rate,
         dim = model_config.dim,
-        batch_size = model_config.batch
-        )
+        batch_size = model_config.batch,
+        shuffle = False
+    )
 
-    vocals_optimizer = tf.keras.optimizers.Adam(
+    optimizer = tf.keras.optimizers.Adam(
         learning_rate = model_config.learning_rate,
         amsgrad=False,
     )
 
-    drums_optimizer = tf.keras.optimizers.Adam(
-        learning_rate =  model_config.learning_rate,
-        amsgrad=False,
-    )
     model = AudioTrackSeparation()
 
-    # Compile the model
-    model.compile(vocals_optimizer, drums_optimizer)
+    # Compile model with single unified optimizer
+    model.compile(optimizer=optimizer)
 
     history = model.fit(
         train_loader,
-        epochs =  model_config.epoch,
+        epochs = model_config.epoch,
         validation_data=validation_loader,
     )
     return model

@@ -8,69 +8,84 @@ class DataGenerator(tf.keras.utils.Sequence):
         Initialization
         """
         self.data = data
-        self.indices = data.items
         self.sampling_rate = sampling_rate
         self.dim = dim
         self.batch_size = batch_size
         self.shuffle = shuffle
-        
+        self.indices = np.arange(len(self.data))
         self.on_epoch_end()
 
     def __len__(self):
         return int(np.ceil(len(self.data) / self.batch_size))
 
     def __getitem__(self, index):
-        if (index + 1) * self.batch_size > len(self.indices):
-            self.batch_size = len(self.indices) - index * self.batch_size
-        # Generate one batch of data
-        # Generate indices of the batch
-        index = self.indices[index * self.batch_size : (index + 1) * self.batch_size]
-        # Find list of IDs
-        batch = [self.indices[k] for k in index]
-        x, y = self.data_generation(batch)
-
+        # Generate indices of the current batch
+        batch_indices = self.indices[index * self.batch_size : (index + 1) * self.batch_size]
+        x, y = self.data_generation(batch_indices)
         return x, y
 
     def on_epoch_end(self):
-
         """
         Updates indexes after each epoch
         """
-        self.index = np.arange(len(self.indices))
-        if self.shuffle == True:
-            np.random.shuffle(self.index)
+        self.indices = np.arange(len(self.data))
+        if self.shuffle:
+            np.random.shuffle(self.indices)
 
     def load(self, idx):
         """Load input and target processed audio."""
-        item = self.data[idx]
+        item = self.data[int(idx)]
 
-        input = librosa.resample(item['mix'].audio_data[0], 
-                                 item['mix'].sample_rate, 
-                                 self.sampling_rate)
-        input = np.expand_dims(input, axis=1)
+        mix_audio = item['mix'].audio_data
+        if mix_audio.ndim > 1 and mix_audio.shape[0] > 1:
+            mix_audio = np.mean(mix_audio, axis=0)
+        else:
+            mix_audio = mix_audio.squeeze()
 
-        vocals = librosa.resample(item['sources']['vocals'].audio_data[0], 
-                                  item['mix'].sample_rate, 
-                                  self.sampling_rate)
-        vocals = np.expand_dims(vocals, axis=1)
+        vocals_audio = item['sources']['vocals'].audio_data
+        if vocals_audio.ndim > 1 and vocals_audio.shape[0] > 1:
+            vocals_audio = np.mean(vocals_audio, axis=0)
+        else:
+            vocals_audio = vocals_audio.squeeze()
 
-        drums = librosa.resample(item['sources']['drums'].audio_data[0], 
-                                 item['mix'].sample_rate, 
-                                 self.sampling_rate)
-        drums = np.expand_dims(drums, axis=1)
-        
+        drums_audio = item['sources']['drums'].audio_data
+        if drums_audio.ndim > 1 and drums_audio.shape[0] > 1:
+            drums_audio = np.mean(drums_audio, axis=0)
+        else:
+            drums_audio = drums_audio.squeeze()
 
-        return input, vocals, drums
+        # Resample to target sampling rate
+        input_resampled = librosa.resample(mix_audio, orig_sr=item['mix'].sample_rate, target_sr=self.sampling_rate)
+        vocals_resampled = librosa.resample(vocals_audio, orig_sr=item['mix'].sample_rate, target_sr=self.sampling_rate)
+        drums_resampled = librosa.resample(drums_audio, orig_sr=item['mix'].sample_rate, target_sr=self.sampling_rate)
 
-    def data_generation(self, batch):
+        # Consistent relative peak normalization
+        mix_peak = np.max(np.abs(input_resampled)) + 1e-7
+        input_resampled = np.clip(input_resampled / mix_peak, -1.0, 1.0)
+        vocals_resampled = np.clip(vocals_resampled / mix_peak, -1.0, 1.0)
+        drums_resampled = np.clip(drums_resampled / mix_peak, -1.0, 1.0)
 
-        x = np.empty((self.batch_size, self.dim, 1))
-        y0 = np.empty((self.batch_size, self.dim, 1))
-        y1 = np.empty((self.batch_size, self.dim, 1))
+        # Fix length to target dimension
+        input_fixed = librosa.util.fix_length(input_resampled, size=self.dim)
+        vocals_fixed = librosa.util.fix_length(vocals_resampled, size=self.dim)
+        drums_fixed = librosa.util.fix_length(drums_resampled, size=self.dim)
 
-        for i, batch_id in enumerate(batch):
-            x[i,], y0[i,], y1[i,] = self.load(
-                batch_id
-            )
+        input_fixed = np.expand_dims(input_fixed, axis=1)
+        vocals_fixed = np.expand_dims(vocals_fixed, axis=1)
+        drums_fixed = np.expand_dims(drums_fixed, axis=1)
+
+        return input_fixed, vocals_fixed, drums_fixed
+
+    def data_generation(self, batch_indices):
+        current_batch_size = len(batch_indices)
+        x = np.empty((current_batch_size, self.dim, 1), dtype=np.float32)
+        y0 = np.empty((current_batch_size, self.dim, 1), dtype=np.float32)
+        y1 = np.empty((current_batch_size, self.dim, 1), dtype=np.float32)
+
+        for i, idx in enumerate(batch_indices):
+            inp, voc, drm = self.load(idx)
+            x[i] = inp
+            y0[i] = voc
+            y1[i] = drm
 
         return x, [y0, y1]

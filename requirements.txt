@@ -1,0 +1,6 @@
+tensorflow>=2.6.0
+numpy
+librosa>=0.8.0
+soundfile
+matplotlib
+scipy
