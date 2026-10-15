@@ -1,8 +1,9 @@
-from Model.UNetBlocks import DownscaleBlock, UpscaleBlock, BottleNeckBlock
+try:
+    from Model.UNetBlocks import DownscaleBlock, UpscaleBlock, BottleNeckBlock
+except ImportError:
+    from UNetBlocks import DownscaleBlock, UpscaleBlock, BottleNeckBlock
 import tensorflow as tf
 from tensorflow.keras import layers
-
-from config import get_parameters
 
 class AudioTrackSeparation(tf.keras.Model):
     def __init__(self):
@@ -104,12 +105,11 @@ class AudioTrackSeparation(tf.keras.Model):
             "total_loss": self.loss_metric_total.result()
         }
 
-    def build_graph(self):
+    def build_graph(self, dim=75008):
         '''
            To build model graph and plot the model summary.
         '''
-        config = get_parameters()
-        x = layers.Input(shape=(config.dim, 1))
+        x = layers.Input(shape=(dim, 1))
         return tf.keras.Model(inputs=[x], outputs=self.call(x))
         
     def call(self, x):

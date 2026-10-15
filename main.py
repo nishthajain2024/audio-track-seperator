@@ -30,8 +30,15 @@ def main(config):
         if not config.test:
             raise ValueError("Please provide an audio file path for testing using --test <path/to/audio.wav>")
 
-        print(f"--- Loading Audio: {config.test} ---")
-        y, sr = librosa.load(config.test, duration=6.80345, sr=config.sampling_rate)
+        test_file = config.test
+        if not os.path.exists(test_file):
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            alt_test = os.path.join(script_dir, test_file)
+            if os.path.exists(alt_test):
+                test_file = alt_test
+
+        print(f"--- Loading Audio: {test_file} ---")
+        y, sr = librosa.load(test_file, duration=6.80345, sr=config.sampling_rate)
         y = librosa.util.fix_length(y, size=config.dim)
         input_audio = np.expand_dims(y, axis=1)
         input_audio = np.expand_dims(input_audio, axis=0)

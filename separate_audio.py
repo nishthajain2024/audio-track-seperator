@@ -74,8 +74,29 @@ def refine_stems_spectral_mask(mixture, pred_vocals, pred_drums, sampling_rate=1
     return clean_voc, clean_drm
 
 def separate(audio_path, model_weights_path='./models/model_weights', output_dir='./output', sampling_rate=11025, dim=75008, use_refinement=True, drum_gain=1.3):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Flexible audio path resolution
     if not os.path.exists(audio_path):
-        raise FileNotFoundError(f"Audio file not found: {audio_path}")
+        alt_audio = os.path.join(script_dir, audio_path)
+        if os.path.exists(alt_audio):
+            audio_path = alt_audio
+        else:
+            raise FileNotFoundError(f"Audio file not found: {audio_path}")
+
+    # Flexible model weights path resolution
+    if os.path.isdir(model_weights_path):
+        candidate = os.path.join(model_weights_path, 'model_weights')
+        if os.path.exists(candidate + '.index') or os.path.exists(candidate):
+            model_weights_path = candidate
+    elif not (os.path.exists(model_weights_path + '.index') or os.path.exists(model_weights_path)):
+        alt_model = os.path.join(script_dir, model_weights_path)
+        if os.path.isdir(alt_model):
+            alt_candidate = os.path.join(alt_model, 'model_weights')
+            if os.path.exists(alt_candidate + '.index') or os.path.exists(alt_candidate):
+                model_weights_path = alt_candidate
+        elif os.path.exists(alt_model + '.index') or os.path.exists(alt_model):
+            model_weights_path = alt_model
 
     print(f"\n==========================================")
     print(f"[+] Audio Source Separation (1D U-Net)")
@@ -84,7 +105,7 @@ def separate(audio_path, model_weights_path='./models/model_weights', output_dir
     print(f"Model Weights  : {model_weights_path}")
     print(f"Sampling Rate  : {sampling_rate} Hz")
     print(f"Drums Boost    : {drum_gain}x")
-    print(f"Isolation Mode : High Purity (HPSS Margin 2.5)")
+    print(f"Isolation Mode : {'Refined Softmask (HPSS)' if use_refinement else 'Raw U-Net Prior'}")
 
     # 1. Load Audio
     print("\n[1/4] Loading and pre-processing audio...")
@@ -175,13 +196,26 @@ def separate(audio_path, model_weights_path='./models/model_weights', output_dir
     print(f"[*] Waveform Plot   : {plot_out}")
     print(f"==========================================\n")
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    return v.lower() in ('true', '1', 't', 'yes', 'y')
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Separate vocals and drums from any audio track.")
-    parser.add_argument('-i', '--input', type=str, default='sample_mixture.wav', help="Path to input audio file (WAV/MP3)")
-    parser.add_argument('-m', '--model', type=str, default='./models/model_weights', help="Path to model weights checkpoint")
-    parser.add_argument('-o', '--output', type=str, default='./output', help="Output directory")
-    parser.add_argument('--refine', type=bool, default=True, help="Enable spectral softmask refinement for zero stem bleed")
-    parser.add_argument('--drum_gain', type=float, default=1.3, help="Volume boost factor for separated drums (default: 1.3)")
+    parser.add_argument('-i', '-a', '--input', '--audio', dest='input', type=str, default='sample_mixture.wav',
+                        help="Path to input audio file (WAV/MP3)")
+    parser.add_argument('-m', '--model', '--model_weights', dest='model', type=str, default='./models/model_weights',
+                        help="Path to model weights checkpoint or directory")
+    parser.add_argument('-o', '--output', '--output_dir', dest='output', type=str, default='./output',
+                        help="Output directory")
+    parser.add_argument('--refine', dest='refine', type=str2bool, default=True,
+                        help="Enable spectral softmask refinement for zero stem bleed (default: True)")
+    parser.add_argument('--no_refine', dest='refine', action='store_false',
+                        help="Disable spectral softmask refinement")
+    parser.add_argument('--drum_gain', type=float, default=1.3,
+                        help="Volume boost factor for separated drums (default: 1.3)")
     args = parser.parse_args()
 
     separate(args.input, args.model, args.output, use_refinement=args.refine, drum_gain=args.drum_gain)
+
